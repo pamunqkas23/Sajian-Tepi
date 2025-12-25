@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <link rel="manifest" href="manifest.json">
+<script>
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('service-worker.js')
+  .then(()=>console.log('Service Worker Registered'))
+  .catch(()=>console.log('Service Worker registration failed'));
+}
+</script>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Kasir Offline">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta charset="UTF-8">
+<title>Sajian Tepi - Kasir Offline Mobile</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body{font-family:'Segoe UI',sans-serif;margin:0;padding:0;background:#1e1e2f;color:#e0e0e0;}
+h2,h3{text-align:center;margin-bottom:10px;color:#f5f5f5;}
+.box{background:#2a2a3d;padding:15px 20px;margin:10px;border-radius:10px;box-shadow:0 4px 8px rgba(0,0,0,0.3);}
+.mode-switch{text-align:center;margin:20px 0;}
+.mode-switch button{margin:0 5px;padding:10px 20px;border:none;border-radius:8px;background:#4e8cff;color:#fff;font-weight:600;}
+.mode-switch button:hover{background:#3567d6;}
+.kasir-layout{display:flex;flex-direction:column;gap:15px;padding:10px;}
+.sidebar{width:100%;background:#2f2f4a;padding:15px;border-radius:10px;box-shadow:0 2px 5px rgba(0,0,0,0.2);}
+.sidebar h3{margin-top:0;color:#f5f5f5;}
+.sidebar button{width:100%;padding:8px;margin:5px 0;border:none;border-radius:6px;background:#444466;color:#e0e0e0;}
+.sidebar button:hover{background:#555588;}
+.sidebar input[type="text"],#bayar,input[type="number"],select{width:100%;padding:8px;border-radius:6px;border:1px solid #666;margin-top:5px;background:#1e1e2f;color:#e0e0e0;}
+.content{display:flex;flex-direction:column;gap:15px;}
+.grid-barang{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;}
+.grid-barang .item{background:#3a3a5a;padding:12px;border-radius:10px;text-align:center;box-shadow:0 3px 6px rgba(0,0,0,0.5);display:flex;flex-direction:column;justify-content:space-between;min-height:100px;}
+.grid-barang .item:hover{transform:translateY(-2px);box-shadow:0 5px 12px rgba(0,0,0,0.7);}
+.grid-barang .item strong{display:block;margin-bottom:5px;font-size:14px;color:#ffffff;word-break:break-word;}
+.grid-barang .item span{font-size:13px;color:#ffd700;margin-bottom:10px;display:block;}
+.grid-barang .item button{padding:6px 10px;border-radius:6px;background:#4e8cff;color:#fff;border:none;font-weight:600;}
+.grid-barang .item button:hover{background:#3567d6;}
+button{cursor:pointer;padding:6px 12px;margin-top:5px;border-radius:6px;border:none;background:#4e8cff;color:#fff;}
+button:hover{background:#3567d6;}
+ul{list-style:none;padding-left:0;}
+ul li{margin-bottom:6px;padding:6px 8px;border-radius:6px;background:#2f2f4a;display:flex;justify-content:space-between;align-items:center;color:#e0e0e0;}
+ul li button{padding:4px 8px;font-size:12px;}
+#total,#kembalian{margin-top:8px;font-weight:bold;color:#ffffff;}
+.copy-struk{margin-top:10px;padding:6px;background:#28a745;color:#fff;border:none;border-radius:6px;width:100%;}
+.copy-struk:hover{background:#1e7e34;}
+@media print{
+    body *{visibility:hidden;}
+    #strukPDF, #strukPDF *{visibility:visible;}
+    #strukPDF{position:absolute;left:0;top:0;width:100%;}
+}
+</style>
+</head>
+<body>
+
+<h2>Sajian Tepi - Kasir Offline Mobile</h2>
+
+<div class="box mode-switch">
+    <button onclick="setMode('kasir')">Mode Kasir</button>
+    <button onclick="bukaLoginAdmin()">Mode Admin</button>
+</div>
+
+<div id="loginAdmin" class="box" style="display:none">
+    <h3>Login Admin</h3>
+    <input type="password" id="pinAdmin" placeholder="Masukkan PIN">
+    <button onclick="loginAdmin()">Login</button>
+</div>
+
+<div id="adminPanel" class="box" style="display:none">
+    <h3>ADMIN - Input Barang</h3>
+    <input type="text" id="nama" placeholder="Nama Barang">
+    <input type="number" id="harga" placeholder="Harga">
+    <select id="kategori">
+        <option value="">Pilih Kategori</option>
+        <option value="Makanan">Makanan</option>
+        <option value="Minuman">Minuman</option>
+    </select>
+    <button onclick="tambahBarang()">Simpan Barang</button>
+
+    <h3>Daftar Barang</h3>
+    <ul id="listBarangAdmin"></ul>
+
+    <h3>Riwayat Transaksi</h3>
+    <ul id="listRiwayatAdmin"></ul>
+</div>
+
+<div id="kasirWrapper" style="display:none">
+    <div id="kasirPanel" class="kasir-layout">
+        <div class="sidebar">
+            <h3>Kategori</h3>
+            <button onclick="filterKategori('ALL')">All</button>
+            <button onclick="filterKategori('Makanan')">Makanan</button>
+            <button onclick="filterKategori('Minuman')">Minuman</button>
+            <h3>Cari</h3>
+            <input type="text" id="search" placeholder="Cari barang..." oninput="tampilBarang()">
+        </div>
+        <div class="content">
+            <div class="box">
+                <h3>Daftar Barang</h3>
+                <div id="listBarang" class="grid-barang"></div>
+            </div>
+            <div class="box">
+                <h3>Keranjang</h3>
+                <ul id="keranjang"></ul>
+                <h3 id="total">Total: Rp0</h3>
+                <input type="number" id="bayar" placeholder="Uang Bayar" oninput="hitungKembalian()">
+                <h3 id="kembalian">Kembalian: Rp0</h3>
+                <button class="copy-struk" onclick="exportPDF()">Cetak / Export PDF</button>
+            </div>
+            <div class="box">
+                <h3>Riwayat Transaksi</h3>
+                <ul id="riwayat"></ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Struk PDF hidden -->
+<div id="strukPDF" style="display:none; padding:20px; background:#fff; color:#000;">
+    <h2>SAJIAN TEPI</h2>
+    <pre id="isiStruk"></pre>
+</div>
+
+<script>
+let barang=JSON.parse(localStorage.getItem("barang"))||[];
+let keranjang=[];
+let riwayat=JSON.parse(localStorage.getItem("riwayat"))||[];
+let kategoriAktif="ALL";
+const PIN_ADMIN="1234";
+
+// ===== MODE =====
+function setMode(mode){const a=document.getElementById("adminPanel");const k=document.getElementById("kasirWrapper");const l=document.getElementById("loginAdmin");if(mode==="admin"){a.style.display="block";k.style.display="none";l.style.display="none";tampilBarangAdmin();tampilRiwayatAdmin();}else{a.style.display="none";k.style.display="block";l.style.display="none";tampilBarang();tampilRiwayat();}}
+function bukaLoginAdmin(){document.getElementById("loginAdmin").style.display="block";document.getElementById("kasirWrapper").style.display="none";document.getElementById("adminPanel").style.display="none";}
+function loginAdmin(){let pin=document.getElementById("pinAdmin").value;if(pin===PIN_ADMIN){document.getElementById("loginAdmin").style.display="none";setMode("admin");tampilRiwayatAdmin();document.getElementById("pinAdmin").value="";}else alert("PIN SALAH!");}
+
+// ===== ADMIN =====
+function tambahBarang(){let n=document.getElementById("nama").value;let h=parseInt(document.getElementById("harga").value);let k=document.getElementById("kategori").value;if(!n||!h||!k){alert("Data belum lengkap");return;}barang.push({nama:n,harga:h,kategori:k});localStorage.setItem("barang",JSON.stringify(barang));tampilBarangAdmin();tampilBarang();document.getElementById("nama").value="";document.getElementById("harga").value="";document.getElementById("kategori").value="";}
+function tampilBarangAdmin(){let l=document.getElementById("listBarangAdmin");l.innerHTML="";barang.forEach((b,i)=>{let li=document.createElement("li");li.innerHTML=`${b.nama} (${b.kategori}) - ${formatRupiah(b.harga)} <button onclick="hapusBarang(${i})">Hapus</button>`;l.appendChild(li);});}
+function hapusBarang(i){if(confirm("Hapus barang?")){barang.splice(i,1);localStorage.setItem("barang",JSON.stringify(barang));tampilBarangAdmin();tampilBarang();}}
+
+// ===== KASIR =====
+function filterKategori(k){kategoriAktif=k;tampilBarang();}
+function tampilBarang(){let l=document.getElementById("listBarang");let kw=document.getElementById("search").value.toLowerCase();l.innerHTML="";let data=barang.filter(b=>(kategoriAktif==="ALL"||b.kategori===kategoriAktif)&&b.nama.toLowerCase().includes(kw));if(data.length===0){l.innerHTML="<p>Barang tidak ditemukan</p>";return;}data.forEach(b=>{let idx=barang.indexOf(b);let d=document.createElement("div");d.className="item";d.innerHTML=`<strong>${b.nama}</strong><span>${formatRupiah(b.harga)}</span><button onclick="tambahKeranjang(${idx})">+</button>`;l.appendChild(d);});}
+function tambahKeranjang(i){let item=barang[i];let ada=keranjang.find(b=>b.nama===item.nama);if(ada) ada.qty++;else keranjang.push({...item,qty:1});tampilKeranjang();}
+function tampilKeranjang(){let l=document.getElementById("keranjang");l.innerHTML="";let t=0;keranjang.forEach((b,i)=>{let s=b.harga*b.qty;t+=s;let li=document.createElement("li");li.innerHTML=`${b.nama} x${b.qty} = ${formatRupiah(s)} <button onclick="tambahQty(${i})">+</button><button onclick="kurangQty(${i})">−</button>`;l.appendChild(li);});document.getElementById("total").innerText="Total: "+formatRupiah(t);}
+function tambahQty(i){keranjang[i].qty++;tampilKeranjang();}
+function kurangQty(i){keranjang[i].qty--;if(keranjang[i].qty<=0) keranjang.splice(i,1);tampilKeranjang();}
+function hitungKembalian(){let b=parseInt(document.getElementById("bayar").value)||0;let t=keranjang.reduce((s,b)=>s+b.harga*b.qty,0);document.getElementById("kembalian").innerText=b>=t?"Kembalian: "+formatRupiah(b-t):"Uang kurang";}
+
+// ===== CETAK / EXPORT PDF =====
+function exportPDF(){
+    if(keranjang.length===0){alert("Keranjang kosong");return;}
+    let total=keranjang.reduce((s,b)=>s+b.harga*b.qty,0);
+    let bayar=parseInt(document.getElementById("bayar").value)||0;
+    let struk="";
+    keranjang.forEach(b=>{struk+=`${b.nama} x${b.qty} = ${formatRupiah(b.harga*b.qty)}\n`;});
+    struk+="---------------------\n";
+    struk+=`TOTAL      : ${formatRupiah(total)}\n`;
+    struk+=`BAYAR      : ${formatRupiah(bayar)}\n`;
+    struk+=`KEMBALIAN  : ${formatRupiah(bayar-total)}\n`;
+    struk+="---------------------\nTerima kasih\n";
+
+    document.getElementById("isiStruk").innerText=struk;
+    document.getElementById("strukPDF").style.display="block";
+    window.print();
+    document.getElementById("strukPDF").style.display="none";
+
+    // reset keranjang & simpan riwayat
+    riwayat.push({waktu:new Date().toLocaleString("id-ID"),total});
+    localStorage.setItem("riwayat",JSON.stringify(riwayat));
+    keranjang=[];document.getElementById("bayar").value="";tampilKeranjang();tampilRiwayat();tampilRiwayatAdmin();}
+
+// ===== RIWAYAT =====
+function tampilRiwayat(){let l=document.getElementById("riwayat");l.innerHTML="";riwayat.slice().reverse().forEach(r=>{let li=document.createElement("li");li.innerHTML=`${r.waktu} - ${formatRupiah(r.total)}`;l.appendChild(li);});}
+function tampilRiwayatAdmin(){let l=document.getElementById("listRiwayatAdmin");l.innerHTML="";riwayat.slice().reverse().forEach((r,i)=>{let li=document.createElement("li");li.innerHTML=`${r.waktu} - ${formatRupiah(r.total)} <button onclick="hapusRiwayatItem(${riwayat.length-1-i})">Hapus</button>`;l.appendChild(li);});}
+function hapusRiwayatItem(i){if(confirm("Apakah Anda yakin ingin menghapus transaksi ini?")){riwayat.splice(i,1);localStorage.setItem("riwayat",JSON.stringify(riwayat));tampilRiwayat();tampilRiwayatAdmin();}}
+function hapusRiwayat(){if(confirm("Apakah Anda yakin ingin menghapus seluruh riwayat transaksi?")){riwayat=[];localStorage.setItem("riwayat",JSON.stringify(riwayat));tampilRiwayat();alert("Riwayat transaksi telah dihapus.");}
+}
+function formatRupiah(a){return "Rp"+a.toLocaleString("id-ID");}
+
+// ===== INIT =====
+document.addEventListener("DOMContentLoaded",()=>{setMode("kasir");tampilBarang();tampilBarangAdmin();tampilRiwayat();tampilRiwayatAdmin();});
+</script>
+</body>
+</html>
